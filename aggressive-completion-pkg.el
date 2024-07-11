@@ -1,0 +1,2 @@
+;; Generated package description from aggressive-completion.el  -*- no-byte-compile: t -*-
+(define-package "aggressive-completion" "1.7.0.20220417.71805" "Automatic minibuffer completion" '((emacs "27.1")) :commit "d92bf2428133b6e261780e16b7030afe91d3668e" :url "https://elpa.gnu.org/packages/aggressive-completion.html" :authors '(("Tassilo Horn" . "tsdh@gnu.org")) :maintainer '("Tassilo Horn" . "tsdh@gnu.org") :keywords '("minibuffer" "completion"))
