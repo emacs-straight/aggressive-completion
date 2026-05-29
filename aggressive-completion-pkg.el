@@ -1,2 +1,2 @@
-;; Generated package description from aggressive-completion.el  -*- no-byte-compile: t -*-
-(define-package "aggressive-completion" "1.7.0.20220417.71805" "Automatic minibuffer completion" '((emacs "27.1")) :commit "d92bf2428133b6e261780e16b7030afe91d3668e" :url "https://elpa.gnu.org/packages/aggressive-completion.html" :authors '(("Tassilo Horn" . "tsdh@gnu.org")) :maintainer '("Tassilo Horn" . "tsdh@gnu.org") :keywords '("minibuffer" "completion"))
+;; Generated package description from aggressive-completion.el  -*- no-byte-compile: t; lexical-binding:t -*-
+(define-package "aggressive-completion" "1.8.0.20260529.0" "Automatic minibuffer completion" '((emacs "27.1")) :commit "c1ead4f049f4cfc9a3a9f8fa567a83a4caa0614d" :url "https://elpa.gnu.org/packages/aggressive-completion.html" :authors '(("Tassilo Horn" . "tsdh@gnu.org")) :maintainer '("Tassilo Horn" . "tsdh@gnu.org") :keywords '("minibuffer" "completion"))

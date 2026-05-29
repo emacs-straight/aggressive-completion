@@ -1,27 +1,27 @@
 ;;; aggressive-completion.el --- Automatic minibuffer completion -*- lexical-binding: t -*-
 
-;; Copyright (C) 2021 Free Software Foundation, Inc.
+;; Copyright (C) 2021-2026 Free Software Foundation, Inc.
 
 ;; Author: Tassilo Horn <tsdh@gnu.org>
 ;; Maintainer: Tassilo Horn <tsdh@gnu.org>
 ;; Keywords: minibuffer completion
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 1.7
+;; Version: 1.8
 
 ;; This file is part of GNU Emacs.
 
-;; GNU Emacs is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
+;; GNU Emacs is free software: you can redistribute it and/or modify it under
+;; the terms of the GNU General Public License as published by the Free
+;; Software Foundation, either version 3 of the License, or (at your option)
+;; any later version.
 
-;; GNU Emacs is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
+;; GNU Emacs is distributed in the hope that it will be useful, but WITHOUT ANY
+;; WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+;; FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+;; details.
 
-;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
+;; You should have received a copy of the GNU General Public License along with
+;; GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 ;;
@@ -31,6 +31,11 @@
 ;; standard completion help (unless the number of possible completions exceeds
 ;; `aggressive-completion-max-shown-completions' or
 ;; `aggressive-completion-auto-completion-help' is set to nil).
+;;
+;; By default, aggressive-completion triggers immediately after entering the
+;; minibuffer for completion, i.e., the *Completions* buffer will be shown.
+;; This behavior is controllable via the user option
+;; `aggressive-completion-trigger-immediately'.
 ;;
 ;; Automatic completion is done after all commands in
 ;; `aggressive-completion-auto-complete-commands'.  The function doing
@@ -113,9 +118,27 @@ set it to some function of some alternative completion UI such as
 Ivy, Selectrum, or Vertico."
   :type 'function)
 
+(defcustom aggressive-completion-trigger-immediately t
+  "If non-nil, trigger immediately after entering the minibuffer.
+That means the *Completions* buffer will be shown immediately
+\(if there are at most `aggressive-completion-max-shown-completions').
+If nil this will only happen after at least one command has
+been performed in the minibuffer (e.g., you've typed something).
+
+The value may also be a predicate function."
+  :type '(choice (const :tag "Yes" t)
+                 (const :tag "No" nil)
+                 (function :tag "Custom Predicate")))
+
 (defvar aggressive-completion--timer nil)
 
-(defvar aggressive-completion--minibuffer-tick nil)
+(defvar-local aggressive-completion--minibuffer-tick nil)
+
+(defun aggressive-completion--trigger-immediately-p ()
+  "Return non-nil, if aggressive-completion should trigger immediately."
+  (if (functionp aggressive-completion-trigger-immediately)
+      (funcall aggressive-completion-trigger-immediately)
+    aggressive-completion-trigger-immediately))
 
 (defun aggressive-completion--get-minibuffer-tick ()
   "Return the current state of the minibuffer."
@@ -124,57 +147,61 @@ Ivy, Selectrum, or Vertico."
 
 (defun aggressive-completion--do ()
   "Perform aggressive completion."
-  (let ((tick (aggressive-completion--get-minibuffer-tick)))
-    (when (and (window-minibuffer-p)
-               (not (equal aggressive-completion--minibuffer-tick
-                           tick)))
-      (setq aggressive-completion--minibuffer-tick tick)
-      (let* ((completions (completion-all-sorted-completions))
-             ;; Don't ding if there are no completions, etc.
-             (visible-bell nil)
-             (ring-bell-function #'ignore)
-             ;; Automatic completion should not cycle.
-             (completion-cycle-threshold nil)
-             (completion-cycling nil))
-        (let ((i 0))
-          (while (and (<= i aggressive-completion-max-shown-completions)
-                      (consp completions))
-            (setq completions (cdr completions))
-            (cl-incf i))
-          (if (and (> i 0)
-                   (<= i aggressive-completion-max-shown-completions))
-              (if (and aggressive-completion-auto-complete
-                       (memq last-command
-                             aggressive-completion-auto-complete-commands))
-                  ;; Perform automatic completion.
-                  (progn
-                    (let ((completion-auto-help
-                           aggressive-completion-auto-completion-help))
-                      (funcall aggressive-completion-auto-complete-fn))
-                    (when (and aggressive-completion-auto-completion-help
-                               (not (window-live-p
-                                     (get-buffer-window "*Completions*"))))
+  (when (window-minibuffer-p)
+    (let ((tick (aggressive-completion--get-minibuffer-tick)))
+      (if (and (null aggressive-completion--minibuffer-tick)
+               (not (aggressive-completion--trigger-immediately-p)))
+          ;; The minibuffer has just been activated and we should not trigger
+          ;; immediately. Set the tick so we only start with the next command.
+          (setq-local aggressive-completion--minibuffer-tick tick)
+        (unless (equal aggressive-completion--minibuffer-tick tick)
+          (setq-local aggressive-completion--minibuffer-tick tick)
+          (let* ((completions (completion-all-sorted-completions))
+                 ;; Don't ding if there are no completions, etc.
+                 (visible-bell nil)
+                 (ring-bell-function #'ignore)
+                 ;; Automatic completion should not cycle.
+                 (completion-cycle-threshold nil)
+                 (completion-cycling nil))
+            (let ((i 0))
+              (while (and (<= i aggressive-completion-max-shown-completions)
+                          (consp completions))
+                (setq completions (cdr completions))
+                (cl-incf i))
+              (if (and (> i 0)
+                       (<= i aggressive-completion-max-shown-completions))
+                  (if (and aggressive-completion-auto-complete
+                           (memq last-command
+                                 aggressive-completion-auto-complete-commands))
+                      ;; Perform automatic completion.
+                      (progn
+                        (let ((completion-auto-help
+                               aggressive-completion-auto-completion-help))
+                          (funcall aggressive-completion-auto-complete-fn))
+                        (when (and aggressive-completion-auto-completion-help
+                                   (not (window-live-p
+                                         (get-buffer-window "*Completions*"))))
+                          (minibuffer-completion-help)))
+                    ;; Only show the completion help.
+                    (when aggressive-completion-auto-completion-help
                       (minibuffer-completion-help)))
-                ;; Only show the completion help.
-                (when aggressive-completion-auto-completion-help
-                  (minibuffer-completion-help)))
-            ;; Close the *Completions* buffer if there are too many
-            ;; or zero completions.
-            (when-let ((win (get-buffer-window "*Completions*")))
-              (when (and
-                     (window-live-p win)
-                     (or
-                      ;; With zero completions, we can always close.
-                      (zerop i)
-                      ;; When we've requested completion help via hitting
-                      ;; TAB twice explicitly, it shouldn't be closed
-                      ;; forcefully here.
-                      (not (memq last-command
-                                 (cons aggressive-completion-auto-complete-fn
-                                       '(minibuffer-completion-help
-                                         minibuffer-complete
-                                         completion-at-point))))))
-                (quit-window nil win)))))))))
+                ;; Close the *Completions* buffer if there are too many
+                ;; or zero completions.
+                (when-let ((win (get-buffer-window "*Completions*")))
+                  (when (and
+                         (window-live-p win)
+                         (or
+                          ;; With zero completions, we can always close.
+                          (zerop i)
+                          ;; When we've requested completion help via hitting
+                          ;; TAB twice explicitly, it shouldn't be closed
+                          ;; forcefully here.
+                          (not (memq last-command
+                                     (cons aggressive-completion-auto-complete-fn
+                                           '(minibuffer-completion-help
+                                             minibuffer-complete
+                                             completion-at-point))))))
+                    (quit-window nil win)))))))))))
 
 (defun aggressive-completion--timer-restart ()
   "Restart `aggressive-completion--timer'."
@@ -212,6 +239,7 @@ Ivy, Selectrum, or Vertico."
   (when (and (not executing-kbd-macro)
              (window-minibuffer-p)
              minibuffer-completion-table)
+    (setq-local aggressive-completion--minibuffer-tick nil)
     (set-keymap-parent aggressive-completion-minibuffer-map (current-local-map))
     (use-local-map aggressive-completion-minibuffer-map)
 
@@ -237,3 +265,7 @@ Ivy, Selectrum, or Vertico."
 (provide 'aggressive-completion)
 
 ;;; aggressive-completion.el ends here
+
+;; Local Variables:
+;; fill-column: 79
+;; End:
